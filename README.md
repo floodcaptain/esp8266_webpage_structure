@@ -12,7 +12,7 @@ ESP8266WiFi.h
 ESP8266WebServer.h
 EEPROM.h
 
-## Reference Links
+## Reference Links and Credits
 
 https://github.com/dreamsparkx/ESP8266-WiFi-Config
 
