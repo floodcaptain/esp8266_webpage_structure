@@ -4,6 +4,7 @@
 this sketch is a reference to host a webpage in AP mode.
 when wifi credentials are keyed in, esp restarts and attempts to connect to keyed in 
 wifi parameters.
+upon pressing _BUTTON_PIN , esp8266 enters into hotspot or AP mode.
 
 ## Dependencies
 
