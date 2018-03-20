@@ -2,14 +2,18 @@
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
 #include <EEPROM.h>
+#include <ESP8266mDNS.h> 
 
 #define _BUTTON_PIN 2
 
-#define _AP_SSID "hotspot"
 #define _AP_PASS "qwerty123"
 
 String st_ssid = "";
 String st_pass = "";
+String deviceID    = "";
+
+unsigned int cur_ms_count = 0;
+unsigned int prev_ms_count = 0;
 
 int ESP_AP_FLAG=0;
 int AP_SERVER_CREATED=0;
@@ -23,31 +27,34 @@ void setup() {
   Serial.begin(9600);                 
   delay(2000);
 
-  read_wifi_sta_credentials();
+  /*** code block to obtain deviceID from MAC***/
+  deviceID=WiFi.macAddress();
+  deviceID.remove(11,16);deviceID.remove(2,1);deviceID.remove(4,1);deviceID.remove(6,1);
+  Serial.print("MAC: ");Serial.print(deviceID);
+  /********************************************/
 
-  // if(!st_wifi_connect(100))
-  // {
-  //   Serial.println("failed to connect to wifi");
-  //   ESP_AP_FLAG = 1;
-  //   WiFi.disconnect();
-  //   start_server();
-  // }
+  //read_wifi_sta_credentials();
+
   st_wifi_connect(100);
+
   delay(2000);
 }
 
 void loop() {
   if(!ESP_AP_FLAG){    //when esp is in st mode
-    if(WiFi.status() == WL_CONNECTED){
 
-      //send_api_data("abc.test:8081","dsf");
-      //user code for wifi functionality  
-    }
-    else 
-      ESP_AP_FLAG=1;
-      AP_SERVER_CREATED=0;
-  } 
-  
+    /**** code block to check wifi available and connect while in AP mode ***/
+    cur_ms_count = millis();
+    if((unsigned long)(cur_ms_count - prev_ms_count)>10000){
+      prev_ms_count = cur_ms_count;
+      if(st_wifi_connect(100)){
+        WiFi.mode(WIFI_STA);
+        ESP_AP_FLAG=0;
+        AP_SERVER_CREATED=1;
+      }
+    } 
+    /************************************************************************/
+
   if(ESP_AP_FLAG){    //when esp is in ap mode
     if(st_wifi_connect(100)){
       WiFi.mode(WIFI_STA);
@@ -58,17 +65,15 @@ void loop() {
     if(!AP_SERVER_CREATED){
     /* this code fragment creates AP SERVER */
       WiFi.disconnect();
-      start_server();
+      start_server(deviceID,_AP_PASS);
       AP_SERVER_CREATED=1;
       ESP_AP_FLAG=1;
       Serial.println("hotspot created");
     }
     server.handleClient();
   }
-  
-
 }
-
+}
 
 /*  
   @function: clears eeprom till data stored .
@@ -78,7 +83,7 @@ void loop() {
             2xx/3xx if data sent
             4xx if data sending failed
 */
-int send_api_data(String api_path,String post_message )
+int send_api_data(String api_path,String post_message)
 {
   if(WiFi.status()!= WL_CONNECTED)
     {return 0;}
@@ -116,6 +121,11 @@ volatile bool st_wifi_connect(volatile int try_count)
     if(++st_connect_counter>try_count)
       return 0;
   }
+  
+  if (!MDNS.begin(deviceID.c_str())) {             // Start the mDNS responder for /deviceID/.local
+    Serial.println("Error setting up MDNS responder!");
+    return 0;
+  }
   Serial.println("wifi connected");
   return 1;
 }
@@ -128,7 +138,7 @@ volatile bool st_wifi_connect(volatile int try_count)
   @retval : 1 if seuccessfully created and configured.
   @NOTE: module is restarted if configuration is failed .
 */
- void start_server()
+ void start_server(String ssid, String pass)
  {
 
   ESP_AP_FLAG = 1;
@@ -137,17 +147,17 @@ volatile bool st_wifi_connect(volatile int try_count)
   IPAddress gateway(192,168,4,1);
   IPAddress subnet(255,255,255,0);
 
-  WiFi.mode(WIFI_AP);
+  WiFi.mode(WIFI_AP_STA);
   if(!WiFi.softAPConfig(local_IP, gateway, subnet))
   {
     reset_module("failed to configure AP");
   }
 
-  if(!WiFi.softAP(_AP_SSID ,_AP_PASS))
+  if(!WiFi.softAP(ssid.c_str() , pass.c_str()))
   {
     reset_module("failed to setup AP");
   }
-  else{Serial.println(_AP_SSID);Serial.println(_AP_PASS);}
+  else{Serial.println(ssid);Serial.println(pass);}
 /**************************SERVER ROUTES*****************/
   server.on("/",homepage);
   server.on("/change_wifi_cred",change_wifi_cred);
@@ -174,7 +184,7 @@ void check_button_press()
       Serial.println("button pressed");
       WiFi.disconnect();
       ESP_AP_FLAG =1;
-      start_server();
+      start_server(deviceID,_AP_PASS);
       delay(100);
     }
   }  
@@ -240,8 +250,7 @@ void homepage()
   @retval : none
 */
 
-void change_wifi_cred()
-{ 
+void change_wifi_cred(){ 
   int i=0;
   String pass_received ="",ssid_received="",finalstring="";
   if(server.args()==2){
@@ -332,3 +341,4 @@ void ClearEeprom(){
 }
 
 /****************************************************/
+
