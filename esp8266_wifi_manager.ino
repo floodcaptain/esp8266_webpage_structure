@@ -10,9 +10,9 @@
 
 String st_ssid = "";
 String st_pass = "";
-int st_connect_counter=0;
 
 int ESP_AP_FLAG=0;
+int AP_SERVER_CREATED=0;
 ESP8266WebServer server(80);
 
 void setup() {
@@ -25,27 +25,48 @@ void setup() {
 
   read_wifi_sta_credentials();
 
-  if(!st_wifi_connect(100))
-  {
-    Serial.println("failed to connect to wifi");
-    ESP_AP_FLAG = 1;
-    WiFi.disconnect();
-    start_server();
-  }
-
+  // if(!st_wifi_connect(100))
+  // {
+  //   Serial.println("failed to connect to wifi");
+  //   ESP_AP_FLAG = 1;
+  //   WiFi.disconnect();
+  //   start_server();
+  // }
+  st_wifi_connect(100);
   delay(2000);
 }
 
 void loop() {
+  if(!ESP_AP_FLAG){    //when esp is in st mode
+    if(WiFi.status() == WL_CONNECTED){
 
-  if(!ESP_AP_FLAG){
-  //send_api_data("abc.test:8081","dsf");
-  check_button_press();
+      //send_api_data("abc.test:8081","dsf");
+      //user code for wifi functionality  
+    }
+    else 
+      ESP_AP_FLAG=1;
+      AP_SERVER_CREATED=0;
   } 
   
-  if(ESP_AP_FLAG){
-  server.handleClient();
+  if(ESP_AP_FLAG){    //when esp is in ap mode
+    if(st_wifi_connect(100)){
+      WiFi.mode(WIFI_STA);
+      ESP_AP_FLAG=0;
+      AP_SERVER_CREATED=1;
+    delay(1000);
+    }
+    if(!AP_SERVER_CREATED){
+    /* this code fragment creates AP SERVER */
+      WiFi.disconnect();
+      start_server();
+      AP_SERVER_CREATED=1;
+      ESP_AP_FLAG=1;
+      Serial.println("hotspot created");
+    }
+    server.handleClient();
   }
+  
+
 }
 
 
@@ -84,9 +105,10 @@ int send_api_data(String api_path,String post_message )
             0 if connection failed .
   @NOTE: module is restarted if configuration is failed .
 */
-bool st_wifi_connect(int try_count)
+volatile bool st_wifi_connect(volatile int try_count)
 {
-  WiFi.mode(WIFI_STA);
+  volatile int st_connect_counter=0;
+  WiFi.mode(WIFI_AP_STA);
   WiFi.begin(st_ssid.c_str(),st_pass.c_str());
   Serial.println("attempting to connect to wifi...");
   while (WiFi.status() != WL_CONNECTED) { 
@@ -94,7 +116,7 @@ bool st_wifi_connect(int try_count)
     if(++st_connect_counter>try_count)
       return 0;
   }
-  Serial.println("connected");
+  Serial.println("wifi connected");
   return 1;
 }
 
@@ -125,6 +147,7 @@ bool st_wifi_connect(int try_count)
   {
     reset_module("failed to setup AP");
   }
+  else{Serial.println(_AP_SSID);Serial.println(_AP_PASS);}
 /**************************SERVER ROUTES*****************/
   server.on("/",homepage);
   server.on("/change_wifi_cred",change_wifi_cred);
@@ -267,7 +290,7 @@ void change_wifi_cred()
     server.send(200,"text/html",temp);
 
     WiFi.mode(WIFI_STA);
-    ESP_AP_FLAG =0;
+    ESP_AP_FLAG =0;AP_SERVER_CREATED=1;
     reset_module("restarting: new wifi configured");
   }
  reset_module("received more than 2 post parameters");
