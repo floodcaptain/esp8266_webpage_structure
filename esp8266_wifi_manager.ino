@@ -76,6 +76,40 @@ void loop() {
 }
 
 /*  
+  @function: send tcp data to host .waits for client to send \r (carriage return).
+  @param: api_path: path or url of API eg. api.abc.com/path
+        port    : port of host
+          data    : message content . 
+  @retval : 0   : if connection estabilished
+        1   : if connection failed
+*/
+int tcp_api(String host, int port,String data, String rcd_data){
+  
+  WiFiClient client;
+
+  if(client.connect(host.c_str(),port)){
+    Serial.println("connected to host");
+    client.print((data +"\r\n").c_str());
+
+      while (client.connected()){
+        if (client.available())
+        {
+          rcd_data = client.readStringUntil('\r');
+          break;
+        }
+      }   
+      client.stop();
+      Serial.println("[Disconnected]");
+      return 1;
+  }
+  else{
+      Serial.println("tcp connection failed!");
+      client.stop();
+      return 0;
+  }
+}
+
+/*  
   @function: clears eeprom till data stored .
   @param: api_path: path or url of API eg. api.abc.com:8081/path
           post_message: message content . 
